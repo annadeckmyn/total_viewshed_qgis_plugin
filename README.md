@@ -7,6 +7,7 @@ A QGIS plugin for computing total (cumulative) viewshed analysis from Digital El
 - **Efficient Tiled Processing**: Processes large DEMs in tiles to manage memory efficiently
 - **GPU Acceleration**: Optional CuPy backend for GPU-accelerated computation on compatible hardware
 - **Optional CHM Masking**: Use a Canopy Height Model to mask certain areas from computation
+- **Vector Cutline Support**: Optionally restrict computation to a vector cutline (select a layer or provide a file). The plugin uses GDAL/OGR (`osgeo`) for cutline geometries; Fiona is not required.
 - **Flexible Parameters**:
   - Ray directions: Control accuracy vs. speed trade-off
   - Observer height: Customize eye level height above terrain
@@ -24,6 +25,7 @@ Ensure you have QGIS 3.20 or later installed. This plugin requires:
 - PyQGIS (included with QGIS)
 - NumPy
 - Rasterio
+ - GDAL/OGR (`osgeo`) — available in QGIS / OSGeo4W
 
 ### Installation Steps
 
@@ -73,6 +75,7 @@ pip install cupy-cuda12x rasterio
 2. **Configure parameters:**
    - **DEM Layer**: Select the Digital Elevation Model to process
    - **CHM Layer (optional)**: Select a Canopy Height Model to mask areas
+   - **Cutline (optional)**: Choose a vector layer containing the cutline to restrict computation, or leave empty to process the full DEM.
    - **Ray Directions**: Number of directions to scan (more = slower but more accurate)
    - **Observer Height**: Height above terrain (typically 1.6m for human eye level)
    - **Max Radius**: Maximum viewing distance in meters (0 = unlimited)
@@ -158,6 +161,12 @@ The plugin generates a GeoTIFF raster where:
 - Install CuPy for your CUDA version
 - Or switch to "NumPy" or "Auto" backend
 
+### "Cutline not applied / plugin errors reading cutline"
+- The plugin reads cutline vectors via GDAL/OGR (`osgeo`) which is included with QGIS. If you provide an external file path, ensure the file is readable and has a valid CRS matching the DEM.
+
+### Notes on dependencies
+- The plugin avoids a Fiona dependency and instead uses the `osgeo` bindings bundled with QGIS. To install Python packages like `rasterio` or `cupy` into the QGIS Python environment, use the OSGeo4W shell or the QGIS Python executable.
+
 ### Computation is very slow
 - Check available RAM; consider smaller tiles or limiting radius
 - Try reducing ray directions
@@ -204,7 +213,7 @@ The viewshed computation is based on horizon-angle algorithms for efficient visi
 
 ---
 
-**Version**: 1.0.0  
+**Version**: 1.1.0  
 **Tested on**: QGIS 3.40+  
-**Requires**: NumPy, Rasterio  
+**Requires**: NumPy, Rasterio, GDAL/OGR (osgeo)  
 **Optional**: CuPy (for GPU acceleration)

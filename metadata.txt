@@ -3,7 +3,7 @@ name=Total Viewshed Calculator
 qgisMinimumVersion=3.20
 qgisMaximumVersion=4.99
 description=Compute total (cumulative) viewshed from a Digital Elevation Model (DEM) using tiled processing and optional GPU acceleration.
-version=1.0.0
+version=1.1.0
 author=Anna Deckmyn
 email=anna.deckmyn@gmail.com
 about=This plugin computes a total viewshed raster layer showing cumulative visibility from all points in a DEM. Supports optional Canopy Height Model masking and GPU acceleration via CuPy.
@@ -11,6 +11,7 @@ homepage=https://github.com/annadeckmyn/total_viewshed_qgis_plugin
 repository=https://github.com/annadeckmyn/total_viewshed_qgis_plugin
 tracker=https://github.com/annadeckmyn/total_viewshed_qgis_plugin/issues
 changelog=
+    1.1.0 - Add optional vector cutline support; use GDAL/OGR instead of Fiona; ensure pixels outside cutline remain nodata; CHM-positive cells set to 0; UI cutline selector and minor bug fixes.
     1.0.0 - Initial release: Total viewshed computation with tiled processing
 
 tags=viewshed, visibility, DEM, raster, analysis, GPU, CuPy

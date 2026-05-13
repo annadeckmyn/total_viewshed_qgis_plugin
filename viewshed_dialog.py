@@ -57,6 +57,15 @@ class ViewshedDialog(QDialog):
         input_layout.addWidget(chm_label)
         input_layout.addWidget(self.chm_layer_combo)
 
+        cutline_label = QLabel('Cutline Layer (optional):')
+        self.cutline_layer_combo = QgsMapLayerComboBox()
+        self.cutline_layer_combo.setFilters(
+            QgsMapLayerProxyModel.VectorLayer
+        )
+        self.cutline_layer_combo.setAllowEmptyLayer(True)
+        input_layout.addWidget(cutline_label)
+        input_layout.addWidget(self.cutline_layer_combo)
+
         input_group.setLayout(input_layout)
         main_layout.addWidget(input_group)
 
@@ -230,6 +239,8 @@ class ViewshedDialog(QDialog):
         dem_path = dem_layer.source()
         chm_layer = self.chm_layer_combo.currentLayer()
         chm_path = chm_layer.source() if chm_layer else None
+        cutline_layer = self.cutline_layer_combo.currentLayer()
+        cutline_path = cutline_layer.source() if cutline_layer else None
 
         output_path = self.output_line.text()
         if not output_path:
@@ -263,6 +274,7 @@ class ViewshedDialog(QDialog):
             tile_size=self.tile_size_spin.value(),
             backend=self.backend_combo.currentData(),
             convert_to_hectares=self.hectares_check.isChecked(),
+            cutline_path=cutline_path,
         )
 
         self.worker.moveToThread(self.worker_thread)

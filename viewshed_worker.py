@@ -5,10 +5,13 @@ from __future__ import annotations
 from math import ceil
 from time import perf_counter
 
+import json
+from osgeo import ogr
 import numpy as np
 import rasterio
 from rasterio.windows import Window
 from rasterio.enums import Resampling
+from rasterio.features import geometry_mask
 from qgis.PyQt.QtCore import QObject, pyqtSignal
 
 try:
@@ -17,6 +20,9 @@ try:
 except Exception as exc:
     cp = None
     CUPY_IMPORT_ERROR = exc
+
+
+NODATA = -9999
 
 
 class ViewshedWorker(QObject):
@@ -33,7 +39,8 @@ class ViewshedWorker(QObject):
 
     def __init__(self, dem_path, chm_path=None, output_path=None,
                  n_dirs=90, observer_height=1.6, max_radius_meters=1200,
-                 tile_size=256, backend='auto', convert_to_hectares=True):
+                 tile_size=256, backend='auto', convert_to_hectares=True,
+                 cutline_path=None):
         """Initialize worker.
 
         Args:
@@ -57,6 +64,7 @@ class ViewshedWorker(QObject):
         self.tile_size = tile_size
         self.backend = backend
         self.convert_to_hectares = convert_to_hectares
+        self.cutline_path = cutline_path
         self.stop_flag = False
 
     def stop(self):
@@ -169,6 +177,56 @@ class ViewshedWorker(QObject):
             cell_size = float(abs(transform.a))
             self.log.emit(f'DEM shape: {height}x{width}, cell size: {cell_size}m')
 
+            # Load cutline shapes (optional) and compute a crop window
+            cutline_shapes = None
+            cutline_window = None
+            crop_row_off = 0
+            crop_col_off = 0
+            if self.cutline_path:
+                try:
+                    ds = ogr.Open(self.cutline_path)
+                    if ds is None:
+                        raise RuntimeError(f'OGR failed to open {self.cutline_path}')
+                    layer = ds.GetLayer()
+                    shapes = []
+                    minx = float('inf')
+                    miny = float('inf')
+                    maxx = float('-inf')
+                    maxy = float('-inf')
+                    for feat in layer:
+                        geom = feat.GetGeometryRef()
+                        if geom is None:
+                            continue
+                        env = geom.GetEnvelope()  # (minX, maxX, minY, maxY)
+                        minx = min(minx, env[0])
+                        maxx = max(maxx, env[1])
+                        miny = min(miny, env[2])
+                        maxy = max(maxy, env[3])
+                        shapes.append(json.loads(geom.ExportToJson()))
+                    ds = None
+                    if shapes:
+                        cutline_shapes = shapes
+                        bounds = (minx, miny, maxx, maxy)
+                        cutline_window = rasterio.windows.from_bounds(*bounds, transform=transform)
+
+                        # Crop the working extent to the cutline window
+                        crop_row_off = int(cutline_window.row_off)
+                        crop_col_off = int(cutline_window.col_off)
+                        height = int(cutline_window.height)
+                        width = int(cutline_window.width)
+
+                        # Update output profile for cropped extent
+                        cropped_transform = rasterio.windows.transform(cutline_window, transform)
+                        profile.update(
+                            width=int(cutline_window.width),
+                            height=int(cutline_window.height),
+                            transform=cropped_transform,
+                        )
+                        profile.update(nodata=NODATA)
+                        self.log.emit(f'Cutline provided; cropping to window {cutline_window}')
+                except Exception as e:
+                    self.log.emit(f'Warning: failed to load cutline {self.cutline_path}: {e}')
+
         chm = None
         if self.chm_path:
             self.log.emit(f'Loading CHM: {self.chm_path}')
@@ -184,7 +242,7 @@ class ViewshedWorker(QObject):
             directions = self.generate_directions(self.n_dirs, xp)
             steps = xp.arange(1, radius_cells + 1, dtype=xp.float32)
 
-            result = np.zeros((height, width), dtype=np.float32)
+            result = np.full((height, width), NODATA, dtype=np.float32)
 
             # Progress tracking
             n_cols = int(ceil(width / self.tile_size))
@@ -201,14 +259,23 @@ class ViewshedWorker(QObject):
                         return
 
                     pad = radius_cells
+                    # Local (cropped) indices for result array
                     row_off = int(core_window.row_off)
                     col_off = int(core_window.col_off)
                     row_end = row_off + int(core_window.height)
                     col_end = col_off + int(core_window.width)
 
+                    # Map core window to global DEM coords when cropped
+                    if cutline_window is not None:
+                        global_row_off = row_off + crop_row_off
+                        global_col_off = col_off + crop_col_off
+                    else:
+                        global_row_off = row_off
+                        global_col_off = col_off
+
                     padded_window = Window(
-                        col_off - pad,
-                        row_off - pad,
+                        global_col_off - pad,
+                        global_row_off - pad,
                         int(core_window.width) + 2 * pad,
                         int(core_window.height) + 2 * pad,
                     )
@@ -245,8 +312,35 @@ class ViewshedWorker(QObject):
                         chm_mask = np.ma.getmaskarray(chm_tile_core)
                         chm_data = chm_tile_core.filled(0).astype(np.float32, copy=False)
                         compute_mask = chm_mask | np.isclose(chm_data, 0.0)
+                        chm_positive = (~chm_mask) & (chm_data > 0)
                     else:
                         compute_mask = np.ones((core_h, core_w), dtype=bool)
+                        chm_positive = np.zeros((core_h, core_w), dtype=bool)
+
+                    # Rasterize cutline for this padded window (or treat as all True)
+                    if cutline_shapes is not None:
+                        padded_tform = rasterio.windows.transform(padded_window, transform=transform)
+                        padded_shape = (int(padded_window.height), int(padded_window.width))
+                        cut_mask_padded = geometry_mask(
+                            cutline_shapes,
+                            out_shape=padded_shape,
+                            transform=padded_tform,
+                            invert=True,
+                        )
+                        cut_mask_core = cut_mask_padded[
+                            core_row_start:core_row_start + core_h,
+                            core_col_start:core_col_start + core_w,
+                        ]
+                    else:
+                        cut_mask_core = np.ones((core_h, core_w), dtype=bool)
+
+                    # Only compute inside cutline
+                    compute_mask = compute_mask & cut_mask_core
+
+                    # Prepare core_result: default nodata, set CHM>0 cells inside cutline to 0
+                    core_result = np.full((core_h, core_w), NODATA, dtype=np.float32)
+                    if np.any(cut_mask_core & chm_positive):
+                        core_result[cut_mask_core & chm_positive] = 0.0
 
                     if not np.any(compute_mask):
                         processed_tiles += 1
@@ -272,7 +366,6 @@ class ViewshedWorker(QObject):
                     if xp is not np:
                         batch_visibility = xp.asnumpy(batch_visibility)
 
-                    core_result = np.zeros((core_h, core_w), dtype=np.float32)
                     core_result[compute_mask] = batch_visibility
                     result[row_off:row_end, col_off:col_end] = core_result
 
@@ -282,7 +375,8 @@ class ViewshedWorker(QObject):
 
             if self.convert_to_hectares:
                 cell_area = float(cell_size) * float(cell_size)
-                result = result * cell_area / 10000
+                valid = result != NODATA
+                result[valid] = result[valid] * cell_area / 10000
 
             # Write output
             self.log.emit(f'Writing output to: {self.output_path}')
