@@ -12,6 +12,7 @@ repository=https://github.com/annadeckmyn/total_viewshed_qgis_plugin
 tracker=https://github.com/annadeckmyn/total_viewshed_qgis_plugin/issues
 changelog=
     1.1.0 - Add optional vector cutline support; use GDAL/OGR instead of Fiona; ensure pixels outside cutline remain nodata; CHM-positive cells set to 0; UI cutline selector and minor bug fixes.
+    1.1.1 - Add Numba JIT fast-path for NumPy backend to accelerate CPU computation.
     1.0.0 - Initial release: Total viewshed computation with tiled processing
 
 tags=viewshed, visibility, DEM, raster, analysis, GPU, CuPy

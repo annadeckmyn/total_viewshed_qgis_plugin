@@ -1,3 +1,6 @@
 # Optional GPU acceleration (choose based on your CUDA version)
 # cupy-cuda11x  # For CUDA 11.0-11.8
 # cupy-cuda12x  # For CUDA 12.0+
+
+# Optional JIT acceleration (CPU):
+# numba  # Adds a Numba `njit` fast-path for much faster CPU execution (recommended)

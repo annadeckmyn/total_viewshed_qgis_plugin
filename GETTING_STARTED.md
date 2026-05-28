@@ -24,6 +24,18 @@ bash install.sh
 
 3. Restart QGIS
 
+## 1.5 Install optional acceleration packages
+
+To speed up CPU computation, install `numba` in the QGIS Python environment. This provides a JIT-compiled fast-path for NumPy and usually yields large speedups:
+
+```bash
+# Using the QGIS Python executable / OSGeo4W shell on Windows:
+# C:\Program Files\QGIS <version>\bin\python-qgis-ltr.bat
+pip install numba
+```
+
+For GPU acceleration, see the GPU section below to install `cupy` matching your CUDA version.
+
 ## 2. Enable in QGIS
 
 1. Open QGIS

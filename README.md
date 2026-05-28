@@ -26,6 +26,7 @@ Ensure you have QGIS 3.20 or later installed. This plugin requires:
 - NumPy
 - Rasterio
  - GDAL/OGR (`osgeo`) — available in QGIS / OSGeo4W
+ - Numba (optional, highly recommended for faster CPU performance)
 
 ### Installation Steps
 
@@ -44,6 +45,11 @@ Ensure you have QGIS 3.20 or later installed. This plugin requires:
    
    ```bash
    pip install cupy-cuda11x  # Replace 11x with your CUDA version (11.2, 11.8, 12.x, etc.)
+   ```
+
+   ```bash
+   # (Optional) Install Numba for CPU JIT acceleration
+   pip install numba
    ```
 
 3. **Enable the plugin in QGIS:**
@@ -191,6 +197,8 @@ The plugin uses the horizon-angle visibility algorithm with:
 - **CPU (NumPy)**: ~1-10 million cells/minute (depends on hardware)
 - **GPU (CuPy)**: ~10-100 million cells/minute (depends on GPU)
 
+When `numba` is installed the plugin uses a JIT-compiled inner loop for the NumPy backend which commonly gives large speedups on modern CPUs.
+
 For a 2000x2000 DEM with 90 directions:
 - CPU: ~4-40 minutes
 - GPU: ~0.5-4 minutes
@@ -217,3 +225,4 @@ The viewshed computation is based on horizon-angle algorithms for efficient visi
 **Tested on**: QGIS 3.40+  
 **Requires**: NumPy, Rasterio, GDAL/OGR (osgeo)  
 **Optional**: CuPy (for GPU acceleration)
+**Optional**: Numba (for faster CPU execution)
